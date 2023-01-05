@@ -3,9 +3,12 @@
 A dead simple protocol library for exchanging messages over TCP.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
+__all__ = ["ConnectionClosed", "RawMessageSocket", "MessageSocket"]
 
 import socket
+
+RECV_SIZE = 1024
 
 
 class ConnectionClosed(ConnectionError):
@@ -39,15 +42,15 @@ class RawMessageSocket:
 
     def _receive_bytes(self, n: int) -> bytearray:
         data = bytearray()
-        # Take at most n bytes from the buffer (unless it
-        # contains less than n bytes, in which take all of it).
+        # Take at most n bytes from the buffer (unless it contains less
+        # than n bytes, in which take all of it).
         buffer_cutoff = min(n, len(self.buffer))
         data += self.buffer[:buffer_cutoff]
         del self.buffer[:buffer_cutoff]
-        # If the buffer didn’t have enough bytes, receive the
-        # rest from the socket.
+        # If the buffer didn’t have enough bytes, receive the rest from
+        # the socket.
         while len(data) < n:
-            chunk = self.sock.recv(1024)
+            chunk = self.sock.recv(RECV_SIZE)
             if not chunk:
                 if len(data) + len(chunk) < n:
                     raise ConnectionClosed(
@@ -55,8 +58,8 @@ class RawMessageSocket:
                 break
             data += chunk
 
-        # If data contains more bytes than necessary, copy them
-        # to the end of the buffer.
+        # If data contains more bytes than necessary, copy them to the
+        # end of the buffer.
         if len(data) > n:
             self.buffer += data[n:]
             return data[:n]
