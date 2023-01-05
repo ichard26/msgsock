@@ -3,32 +3,45 @@
 A dead simple protocol library for exchanging messages over TCP.
 """
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 __all__ = ["ConnectionClosed", "RawMessageSocket", "MessageSocket"]
 
 import socket
+from typing import Literal
 
 RECV_SIZE = 1024
 
 
 class ConnectionClosed(ConnectionError):
-    pass
+    def __init__(self, msg: str, data: bytes, expected: int) -> None:
+        super().__init__(msg)
+        self.data = data
+        self.expected = expected
+
+    def __str__(self) -> str:
+        msg, received, expected = self.args[0], len(self.data), self.expected
+        return f"{msg} (got {received}, expected {expected})"
 
 
 class RawMessageSocket:
-    def __init__(self, conn: socket.socket, header_size: int = 4) -> None:
+    def __init__(self, conn: socket.socket, *, header_size: int = 4) -> None:
         self.sock = conn
         self.header_size = header_size
         self.buffer = bytearray()
-        self.byteorder = "big"
+        self.byteorder: Literal["big", "little"] = "big"
 
     def receive_message(self) -> bytearray:
         # Receive header and decode to an integer, denoting the length
         # of payload.
         try:
             header = self._receive_bytes(self.header_size)
-        except ConnectionClosed:
-            return b""
+        except ConnectionClosed as error:
+            # If the connection was closed while the header was still
+            # being received, reraising the error is more appropriate,
+            # otherwise return an empty response.
+            if error.data:
+                raise
+            return bytearray()
 
         payload_length = int.from_bytes(header, self.byteorder)
         return self._receive_bytes(payload_length)
@@ -52,10 +65,8 @@ class RawMessageSocket:
         while len(data) < n:
             chunk = self.sock.recv(RECV_SIZE)
             if not chunk:
-                if len(data) + len(chunk) < n:
-                    raise ConnectionClosed(
-                        "Connection closed before all data received!")
-                break
+                raise ConnectionClosed(
+                    "Connection closed before all bytes received", data, n)
             data += chunk
 
         # If data contains more bytes than necessary, copy them to the
@@ -67,9 +78,12 @@ class RawMessageSocket:
         return data
 
 
-class MessageSocket(RawMessageSocket):
+class MessageSocket:
+    def __init__(self, conn: socket.socket, *, header_size: int = 4) -> None:
+        self.conn = RawMessageSocket(conn, header_size=header_size)
+
     def receive_message(self) -> str:
-        return super().receive_message().decode("utf-8")
+        return self.conn.receive_message().decode("utf-8")
 
     def send_message(self, message: str) -> None:
-        super().send_message(message.encode("utf-8"))
+        self.conn.send_message(message.encode("utf-8"))
