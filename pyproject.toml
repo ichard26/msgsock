@@ -7,6 +7,7 @@ name = "msgsock"
 authors = [{name = "Richard Si", email = "sichard26@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
+python-requires = ">=3.8"
 classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
 

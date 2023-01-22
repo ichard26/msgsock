@@ -3,16 +3,16 @@
 A dead simple protocol library for exchanging messages over TCP.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __all__ = ["ConnectionClosed", "RawMessageSocket", "MessageSocket"]
 
 import socket
-from typing import Literal
+from typing import Final, Literal
 
 RECV_SIZE = 1024
 
 
-class ConnectionClosed(ConnectionError):
+class ConnectionClosed(Exception):
     def __init__(self, msg: str, data: bytes, expected: int) -> None:
         super().__init__(msg)
         self.data = data
@@ -28,7 +28,7 @@ class RawMessageSocket:
         self.sock = conn
         self.header_size = header_size
         self.buffer = bytearray()
-        self.byteorder: Literal["big", "little"] = "big"
+        self.byteorder: Final[Literal["big", "little"]] = "big"
 
     def receive_message(self) -> bytearray:
         # Receive header and decode to an integer, denoting the length
@@ -62,16 +62,18 @@ class RawMessageSocket:
         del self.buffer[:buffer_cutoff]
         # If the buffer didn’t have enough bytes, receive the rest from
         # the socket.
-        while len(data) < n:
+        remaining = n - buffer_cutoff
+        while remaining > 0:
             chunk = self.sock.recv(RECV_SIZE)
             if not chunk:
                 raise ConnectionClosed(
                     "Connection closed before all bytes received", data, n)
             data += chunk
+            remaining -= len(chunk)
 
         # If data contains more bytes than necessary, copy them to the
         # end of the buffer.
-        if len(data) > n:
+        if remaining < 0:
             self.buffer += data[n:]
             return data[:n]
 
