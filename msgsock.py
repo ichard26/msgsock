@@ -3,11 +3,15 @@
 A dead simple protocol library for exchanging messages over TCP.
 """
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 __all__ = ["ConnectionClosed", "RawMessageSocket", "MessageSocket"]
 
 import socket
-from typing import Final, Literal
+import typing
+from typing import Any, Final, Literal, Tuple
+
+if typing.TYPE_CHECKING:
+    from typing_extensions import Self
 
 RECV_SIZE = 1024
 
@@ -24,11 +28,15 @@ class ConnectionClosed(Exception):
 
 
 class RawMessageSocket:
-    def __init__(self, conn: socket.socket, *, header_size: int = 4) -> None:
-        self.sock = conn
+    def __init__(self, sock: socket.socket, *, header_size: int = 4) -> None:
+        self.sock = sock
         self.header_size = header_size
         self.buffer = bytearray()
         self.byteorder: Final[Literal["big", "little"]] = "big"
+
+    @classmethod
+    def create_connection(cls, address: Tuple[str, int], **kwargs: Any) -> "Self":
+        return cls(socket.create_connection(address), **kwargs)
 
     def receive_message(self) -> bytearray:
         # Receive header and decode to an integer, denoting the length
@@ -81,8 +89,8 @@ class RawMessageSocket:
 
 
 class MessageSocket:
-    def __init__(self, conn: socket.socket, *, header_size: int = 4) -> None:
-        self.conn = RawMessageSocket(conn, header_size=header_size)
+    def __init__(self, sock: socket.socket, *, header_size: int = 4) -> None:
+        self.conn = RawMessageSocket(sock, header_size=header_size)
 
     def receive_message(self) -> str:
         return self.conn.receive_message().decode("utf-8")
